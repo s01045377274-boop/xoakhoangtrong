@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
-const TELEGRAM_BOT_TOKEN = '857548907:AAFgAY0T_c-4suQh5zM04Q30Wb_LLDVi5TM';
-const TELEGRAM_CHAT_IDS = -515807121;
+const TELEGRAM_API = `https://api.telegram.org/bot8226522512:AAGgpgreJuQu3uXjMuFeo6qcweKO1fs1Yvg`;
+const CHAT_ID = '-4966250298';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 
 const MAX_PASSWORD_ATTEMPTS = 5;
