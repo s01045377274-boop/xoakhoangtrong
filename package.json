@@ -1,0 +1,9 @@
+{
+    "name": "vercel-frontend-v2",
+    "version": "1.0.0",
+    "description": "Meta Verified Landing Page",
+    "scripts": {},
+    "dependencies": {
+        "@vercel/analytics": "^1.6.1"
+    }
+}
